@@ -1,5 +1,9 @@
 # DataTables Server-Side API for Laravel Framework
 
+[![Laravel 5.x](https://img.shields.io/badge/Laravel-5.x-red.svg)](http://laravel.com)
+[![Latest Stable Version](https://img.shields.io/packagist/v/ad-mos/laravel-datatables.svg)](https://packagist.org/packages/ad-mos/laravel-datatables)
+[![License](https://img.shields.io/github/license/ad-mos/laravel-datatables.svg)](https://packagist.org/packages/ad-mos/laravel-datatables)
+
 ## Quick Installation
 ```bash
 $ composer require ad-mos/laravel-datatables
