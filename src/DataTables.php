@@ -188,16 +188,15 @@ class DataTables
     {
         if (array_key_exists('order', $reqData)) {
             try {
-                if (!$this->aliases || !array_key_exists($columns[$reqData['order'][0]['column']]['data'], $this->aliases)) {
-                    $this->query->orderBy(
-                        $this->table. '.' .$columns[$reqData['order'][0]['column']]['data'],
-                        $reqData['order'][0]['dir']
-                    );
+                $orderByColumn = $columns[$reqData['order'][0]['column']]['data'];
+
+                $direction = $reqData['order'][0]['dir'];
+                if ($direction !== 'asc' && $direction !== 'desc') return;
+
+                if (!$this->aliases || !array_key_exists($orderByColumn, $this->aliases)) {
+                    $this->query->orderBy($this->table . '.' . $orderByColumn, $direction);
                 } else {
-                    $this->query->orderByRaw(
-                        $this->aliases[$columns[$reqData['order'][0]['column']]['data']] . ' ' .
-                        $reqData['order'][0]['dir']
-                    );
+                    $this->query->orderByRaw($this->aliases[$orderByColumn] . ' ' .$direction);
                 }
             } catch (\Exception $exception) {}
         }
