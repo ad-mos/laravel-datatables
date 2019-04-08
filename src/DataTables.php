@@ -125,9 +125,9 @@ class DataTables
                     $searchField = $this->getSearchField($column['data']);
 
                     $searchMethod = $this->getSearchMethod($searchField);
-                    $searchQuery = $this->getSearchQuery($searchField, $column);
+                    [$searchQuery,$searchBindings] = $this->getSearchQuery($searchField, $column);
 
-                    $this->query->{$searchMethod}($searchQuery);
+                    $this->query->{$searchMethod}($searchQuery, $searchBindings);
                 }
             } catch (\Exception $exception) {}
         }
@@ -143,12 +143,21 @@ class DataTables
             $from = $this->toMySQLDate($from);
             $to = $this->toMySQLDate($to, 1);
 
-            return $searchField . ' between \'' . $from . '\' and \'' . $to . '\'';
+            return [
+                $searchField . ' between ? and ?',
+                [$from, $to]
+            ];
         } else {
             if ($this->shouldUseLike($this->tableColumns, $column['data'])) {
-                return $searchField . ' like \'%' . $value . '%\'';
+                return [
+                    $searchField . ' like ?',
+                    ['%'.$value.'%']
+                ];
             } else {
-                return $searchField . ' = \'' . $value . '\'';
+                return [
+                    $searchField . ' = ?',
+                    [$value]
+                ];
             }
         }
     }
