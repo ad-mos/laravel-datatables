@@ -206,7 +206,7 @@ class DataTables
     private function setResultCounters(array $response) : array
     {
         $response["recordsTotal"] = $this->model->count();
-        if ($this->query->getQuery()->wheres) {
+        if ($this->query->getQuery()->wheres || $this->query->getQuery()->havings) {
             if ($this->query->getQuery()->groups || $this->query->getQuery()->havings) {
                 $response["recordsFiltered"] = $this->DB->table($this->DB->raw('('.$this->query->toSql().') as s'))
                     ->setBindings($this->query->getBindings())
