@@ -10,7 +10,9 @@ use Doctrine\DBAL\Types\SmallIntType;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 
 class DataTables
 {
@@ -36,17 +38,17 @@ class DataTables
     private $DB;
 
 
-    public function __construct(Request $request)
+    public function __construct(Request $request, DatabaseManager $DB)
     {
         $this->request = $request;
-        $this->DB = app(DatabaseManager::class);
+        $this->DB = $DB;
     }
 
     /**
      * @param Illuminate\Database\Eloquent\Model $model
      * @param Illuminate\Database\Eloquent\Builder $query
      * @param array $aliases
-     * @return \Illuminate\Http\Response
+     * @return \Illuminate\Http\Response|\Illuminate\Http\JsonResponse
      */
     public function provide(Model $model, Builder $query = null, array $aliases = null)
     {
@@ -83,10 +85,10 @@ class DataTables
                 ->get()
                 ->toArray();
 
-            return response()->json($response);
+            return new JsonResponse($response);
         }
 
-        return response('', 400);
+        return new Response('', 400);
     }
 
     private function prepareSelects()

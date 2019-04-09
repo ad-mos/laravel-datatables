@@ -2,6 +2,7 @@
 
 namespace AdMos\DataTables;
 
+use Illuminate\Database\DatabaseManager;
 use Illuminate\Support\ServiceProvider;
 
 class DataTablesServiceProvider extends ServiceProvider
@@ -13,10 +14,15 @@ class DataTablesServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        $this->app->alias('datatables', DataTables::class);
+        $app = $this->app;
 
-        $this->app->singleton('datatables', function () {
-            return new DataTables(request());
+        $app->alias('datatables', DataTables::class);
+
+        $app->singleton('datatables', function () use ($app) {
+            return new DataTables(
+                $app->make('request'),
+                $app->make(DatabaseManager::class)
+            );
         });
     }
 
