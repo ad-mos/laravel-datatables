@@ -124,7 +124,8 @@ class DataTables
         foreach ($columns as $column) {
             try {
                 if ($column['search']['value'] !== null) {
-                    $searchField = $this->getSearchField($column['data']);
+                    $searchField = $this->getField($column['data']);
+                    if (!$searchField) continue;
 
                     $searchMethod = $this->getSearchMethod($searchField);
                     [$searchQuery,$searchBindings] = $this->getSearchQuery($searchField, $column);
@@ -177,30 +178,34 @@ class DataTables
             ->toDateString();
     }
 
-    private function getSearchField($column)
-    {
-        if (!$this->aliases || !array_key_exists($column, $this->aliases)) {
-            return $this->table . '.' . $column;
-        } else {
-            return $this->aliases[$column];
-        }
-    }
-
     private function applyOrder(array $reqData, array $columns)
     {
         if (array_key_exists('order', $reqData)) {
             try {
-                $orderByColumn = $columns[$reqData['order'][0]['column']]['data'];
+                $orderColumnId = +$reqData['order'][0]['column'];
+                $orderByColumn = $columns[$orderColumnId]['data'];
 
                 $direction = $reqData['order'][0]['dir'];
                 if ($direction !== 'asc' && $direction !== 'desc') return;
 
-                if (!$this->aliases || !array_key_exists($orderByColumn, $this->aliases)) {
-                    $this->query->orderBy($this->table . '.' . $orderByColumn, $direction);
-                } else {
-                    $this->query->orderByRaw($this->aliases[$orderByColumn] . ' ' .$direction);
-                }
+                $orderField = $this->getField($orderByColumn);
+                if (!$orderField) return;
+
+                $this->query->orderByRaw($orderField . ' ' . $direction);
             } catch (\Exception $exception) {}
+        }
+    }
+
+    private function getField($column)
+    {
+        if (!$this->aliases || !array_key_exists($column, $this->aliases)) {
+            if (array_key_exists($column, $this->tableColumns)) {
+                return $this->table . '.' . $column;
+            } else {
+                return null;
+            }
+        } else {
+            return $this->aliases[$column];
         }
     }
 
