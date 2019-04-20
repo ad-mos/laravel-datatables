@@ -31,6 +31,9 @@ class DataTables
     /** @var Builder $query */
     private $query;
 
+    /** @var Builder $query */
+    private $originalQuery;
+
     /** @var array|null $aliases */
     private $aliases;
 
@@ -66,6 +69,7 @@ class DataTables
             $reqData = $this->request->all();
 
             $this->prepareSelects();
+            $this->originalQuery = clone $query;
 
             if (array_key_exists('columns', $reqData) && is_array($reqData['columns'])) {
                 $columns = $reqData['columns'];
@@ -211,21 +215,30 @@ class DataTables
 
     private function setResultCounters(array $response) : array
     {
-        $response["recordsTotal"] = $this->model->count();
-        if ($this->query->getQuery()->wheres || $this->query->getQuery()->havings) {
-            if ($this->query->getQuery()->groups || $this->query->getQuery()->havings) {
-                $response["recordsFiltered"] = $this->DB->table($this->DB->raw('('.$this->query->toSql().') as s'))
-                    ->setBindings($this->query->getBindings())
-                    ->selectRaw('count(*) as count')
-                    ->first()->count;
-            } else {
-                $response["recordsFiltered"] = $this->query->count();
-            }
+        $response["recordsTotal"] = $this->getCount($this->originalQuery);
+
+        if ($this->query->getQuery()->wheres &&
+            $this->originalQuery->getQuery()->wheres !== $this->query->getQuery()->wheres) {
+            $response["recordsFiltered"] = $this->getCount($this->query);
         } else {
             $response["recordsFiltered"] = $response["recordsTotal"];
         }
 
         return $response;
+    }
+
+    private function getCount(Builder $query) : int
+    {
+        if ($query->getQuery()->groups || $query->getQuery()->havings) {
+            return $this->DB
+                ->table($this->DB->raw('(' . $query->toSql() . ') as s'))
+                ->setBindings($query->getBindings())
+                ->selectRaw('count(*) as count')
+                ->first()
+                ->count;
+        } else {
+            return $query->count();
+        }
     }
 
     private function applyPagination(array $reqData)
