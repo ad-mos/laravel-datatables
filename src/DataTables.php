@@ -40,7 +40,6 @@ class DataTables
     /** @var DatabaseManager */
     private $DB;
 
-
     public function __construct(Request $request, DatabaseManager $DB)
     {
         $this->request = $request;
@@ -48,9 +47,10 @@ class DataTables
     }
 
     /**
-     * @param Illuminate\Database\Eloquent\Model $model
+     * @param Illuminate\Database\Eloquent\Model   $model
      * @param Illuminate\Database\Eloquent\Builder $query
-     * @param array $aliases
+     * @param array                                $aliases
+     *
      * @return \Illuminate\Http\Response|\Illuminate\Http\JsonResponse
      */
     public function provide(Model $model, Builder $query = null, array $aliases = null)
@@ -108,13 +108,13 @@ class DataTables
 
         if ($tableAttr) {
             foreach ($tableAttr as $attr) {
-                $selects[] = $this->DB->raw($this->table . '.' . $attr);
+                $selects[] = $this->DB->raw($this->table.'.'.$attr);
             }
         }
 
         if ($this->aliases) {
             foreach ($this->aliases as $alias => $value) {
-                $selects[] = $this->DB->raw($value . ' AS ' . $alias);
+                $selects[] = $this->DB->raw($value.' AS '.$alias);
             }
         }
 
@@ -129,14 +129,17 @@ class DataTables
             try {
                 if ($column['search']['value'] !== null) {
                     $searchField = $this->getField($column['data']);
-                    if (!$searchField) continue;
+                    if (!$searchField) {
+                        continue;
+                    }
 
                     $searchMethod = $this->getSearchMethod($searchField);
                     [$searchQuery,$searchBindings] = $this->getSearchQuery($searchField, $column);
 
                     $this->query->{$searchMethod}($searchQuery, $searchBindings);
                 }
-            } catch (\Exception $exception) {}
+            } catch (\Exception $exception) {
+            }
         }
     }
 
@@ -151,19 +154,19 @@ class DataTables
             $to = $this->toMySQLDate($to, 1);
 
             return [
-                $searchField . ' between ? and ?',
-                [$from, $to]
+                $searchField.' between ? and ?',
+                [$from, $to],
             ];
         } else {
             if ($this->shouldUseLike($this->tableColumns, $column['data'])) {
                 return [
-                    $searchField . ' like ?',
-                    ['%'.$value.'%']
+                    $searchField.' like ?',
+                    ['%'.$value.'%'],
                 ];
             } else {
                 return [
-                    $searchField . ' = ?',
-                    [$value]
+                    $searchField.' = ?',
+                    [$value],
                 ];
             }
         }
@@ -172,7 +175,7 @@ class DataTables
     private function isDateRange($value) : bool
     {
         return (bool) (strlen($value) === 23) &&
-            preg_match("^\\d{2}/\\d{2}/\\d{4} - \\d{2}/\\d{2}/\\d{4}^", $value);
+            preg_match('^\\d{2}/\\d{2}/\\d{4} - \\d{2}/\\d{2}/\\d{4}^', $value);
     }
 
     private function toMySQLDate($value, $plusDay = 0)
@@ -190,13 +193,18 @@ class DataTables
                 $orderByColumn = $columns[$orderColumnId]['data'];
 
                 $direction = $reqData['order'][0]['dir'];
-                if ($direction !== 'asc' && $direction !== 'desc') return;
+                if ($direction !== 'asc' && $direction !== 'desc') {
+                    return;
+                }
 
                 $orderField = $this->getField($orderByColumn);
-                if (!$orderField) return;
+                if (!$orderField) {
+                    return;
+                }
 
-                $this->query->orderByRaw($orderField . ' ' . $direction);
-            } catch (\Exception $exception) {}
+                $this->query->orderByRaw($orderField.' '.$direction);
+            } catch (\Exception $exception) {
+            }
         }
     }
 
@@ -204,7 +212,7 @@ class DataTables
     {
         if (!$this->aliases || !array_key_exists($column, $this->aliases)) {
             if (array_key_exists($column, $this->tableColumns)) {
-                return $this->table . '.' . $column;
+                return $this->table.'.'.$column;
             } else {
                 return null;
             }
@@ -215,13 +223,13 @@ class DataTables
 
     private function setResultCounters(array $response) : array
     {
-        $response["recordsTotal"] = $this->getCount($this->originalQuery);
+        $response['recordsTotal'] = $this->getCount($this->originalQuery);
 
         if ($this->query->getQuery()->wheres &&
             $this->originalQuery->getQuery()->wheres !== $this->query->getQuery()->wheres) {
-            $response["recordsFiltered"] = $this->getCount($this->query);
+            $response['recordsFiltered'] = $this->getCount($this->query);
         } else {
-            $response["recordsFiltered"] = $response["recordsTotal"];
+            $response['recordsFiltered'] = $response['recordsTotal'];
         }
 
         return $response;
@@ -231,7 +239,7 @@ class DataTables
     {
         if ($query->getQuery()->groups || $query->getQuery()->havings) {
             return $this->DB
-                ->table($this->DB->raw('(' . $query->toSql() . ') as s'))
+                ->table($this->DB->raw('('.$query->toSql().') as s'))
                 ->setBindings($query->getBindings())
                 ->selectRaw('count(*) as count')
                 ->first()
@@ -267,12 +275,15 @@ class DataTables
 
     /**
      * @param Column[] $tableColumns
-     * @param string $column
+     * @param string   $column
+     *
      * @return mixed
      */
     private function shouldUseLike($tableColumns, $column)
     {
-        if (!array_key_exists($column, $tableColumns)) return true;
+        if (!array_key_exists($column, $tableColumns)) {
+            return true;
+        }
 
         return !($tableColumns[$column]->getType() instanceof IntegerType ||
             $tableColumns[$column]->getType() instanceof SmallIntType ||

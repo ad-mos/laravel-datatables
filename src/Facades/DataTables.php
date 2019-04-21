@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Facade;
 
 /**
  * @mixin \AdMos\DataTables\DataTables
+ *
  * @method static \Illuminate\Http\Response provide($model, $query, $aliases)
  *
  * @see \AdMos\DataTables\DataTables
