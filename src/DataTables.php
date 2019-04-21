@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Arr;
 
 class DataTables
 {
@@ -47,9 +48,9 @@ class DataTables
     }
 
     /**
-     * @param Illuminate\Database\Eloquent\Model   $model
-     * @param Illuminate\Database\Eloquent\Builder $query
-     * @param array                                $aliases
+     * @param \Illuminate\Database\Eloquent\Model   $model
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @param array                                 $aliases
      *
      * @return \Illuminate\Http\Response|\Illuminate\Http\JsonResponse
      */
@@ -67,6 +68,7 @@ class DataTables
                 ->listTableColumns($this->table);
 
             $reqData = $this->request->all();
+            $response = [];
 
             $this->prepareSelects();
             $this->originalQuery = clone $query;
@@ -126,29 +128,27 @@ class DataTables
     private function applySearch(array $columns)
     {
         foreach ($columns as $column) {
-            try {
-                if ($column['search']['value'] !== null) {
-                    $searchField = $this->getField($column['data']);
-                    if (!$searchField) {
-                        continue;
-                    }
+            $searchValue = Arr::get($column, 'search.value');
+            $searchColumn = Arr::get($column, 'data');
 
-                    $searchMethod = $this->getSearchMethod($searchField);
-                    [$searchQuery,$searchBindings] = $this->getSearchQuery($searchField, $column);
-
-                    $this->query->{$searchMethod}($searchQuery, $searchBindings);
+            if (!is_null($searchValue) && !is_null($searchColumn)) {
+                $searchField = $this->getField($searchColumn);
+                if (!$searchField) {
+                    continue;
                 }
-            } catch (\Exception $exception) {
+
+                $searchMethod = $this->getSearchMethod($searchField);
+                [$searchQuery, $searchBindings] = $this->getSearchQuery($searchField, $searchValue, $searchColumn);
+
+                $this->query->{$searchMethod}($searchQuery, $searchBindings);
             }
         }
     }
 
-    private function getSearchQuery($searchField, $column)
+    private function getSearchQuery($searchField, $searchValue, $column)
     {
-        $value = $column['search']['value'];
-
-        if ($this->isDateRange($value)) {
-            [$from,$to] = explode(' - ', $value);
+        if ($this->isDateRange($searchValue)) {
+            [$from, $to] = explode(' - ', $searchValue);
 
             $from = $this->toMySQLDate($from);
             $to = $this->toMySQLDate($to, 1);
@@ -158,15 +158,15 @@ class DataTables
                 [$from, $to],
             ];
         } else {
-            if ($this->shouldUseLike($this->tableColumns, $column['data'])) {
+            if ($this->shouldUseLike($this->tableColumns, $column)) {
                 return [
                     $searchField.' like ?',
-                    ['%'.$value.'%'],
+                    ['%'.$searchValue.'%'],
                 ];
             } else {
                 return [
                     $searchField.' = ?',
-                    [$value],
+                    [$searchValue],
                 ];
             }
         }
@@ -188,29 +188,31 @@ class DataTables
     private function applyOrder(array $reqData, array $columns)
     {
         if (array_key_exists('order', $reqData)) {
-            try {
-                $orderColumnId = +$reqData['order'][0]['column'];
-                $orderByColumn = $columns[$orderColumnId]['data'];
+            $orderColumnId = Arr::get($reqData, 'order.0.column');
+            $orderByColumn = Arr::get($columns, $orderColumnId.'.data');
+            $direction = Arr::get($reqData, 'order.0.dir');
 
-                $direction = $reqData['order'][0]['dir'];
-                if ($direction !== 'asc' && $direction !== 'desc') {
-                    return;
-                }
-
-                $orderField = $this->getField($orderByColumn);
-                if (!$orderField) {
-                    return;
-                }
-
-                $this->query->orderByRaw($orderField.' '.$direction);
-            } catch (\Exception $exception) {
-            }
+            $this->applyQueryOrder($orderByColumn, $direction);
         }
+    }
+
+    private function applyQueryOrder($orderByColumn, $direction)
+    {
+        if ($direction !== 'asc' && $direction !== 'desc') {
+            return;
+        }
+
+        $orderField = $this->getField($orderByColumn);
+        if (!$orderField) {
+            return;
+        }
+
+        $this->query->orderByRaw($orderField.' '.$direction);
     }
 
     private function getField($column)
     {
-        if (!$this->aliases || !array_key_exists($column, $this->aliases)) {
+        if (empty($this->aliases) || !array_key_exists($column, $this->aliases)) {
             if (array_key_exists($column, $this->tableColumns)) {
                 return $this->table.'.'.$column;
             } else {
@@ -225,7 +227,7 @@ class DataTables
     {
         $response['recordsTotal'] = $this->getCount($this->originalQuery);
 
-        if ($this->query->getQuery()->wheres &&
+        if (!empty($this->query->getQuery()->wheres) &&
             $this->originalQuery->getQuery()->wheres !== $this->query->getQuery()->wheres) {
             $response['recordsFiltered'] = $this->getCount($this->query);
         } else {
@@ -237,10 +239,10 @@ class DataTables
 
     private function getCount(Builder $query) : int
     {
-        if ($query->getQuery()->groups || $query->getQuery()->havings) {
+        if (!empty($query->getQuery()->groups) || !empty($query->getQuery()->havings)) {
             return $this->DB
                 ->table($this->DB->raw('('.$query->toSql().') as s'))
-                ->setBindings($query->getBindings())
+                ->setBindings($query->getQuery()->getBindings())
                 ->selectRaw('count(*) as count')
                 ->first()
                 ->count;
