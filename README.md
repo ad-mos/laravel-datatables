@@ -2,6 +2,7 @@
 
 [![Laravel 5.x](https://img.shields.io/badge/Laravel-5.x-red.svg)](http://laravel.com)
 [![Latest Stable Version](https://img.shields.io/packagist/v/ad-mos/laravel-datatables.svg)](https://packagist.org/packages/ad-mos/laravel-datatables)
+[![StyleCI](https://github.styleci.io/repos/179811946/shield?branch=master)](https://github.styleci.io/repos/179811946)
 [![License](https://img.shields.io/github/license/ad-mos/laravel-datatables.svg)](https://packagist.org/packages/ad-mos/laravel-datatables)
 
 ## Quick Installation
