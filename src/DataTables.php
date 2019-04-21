@@ -264,9 +264,28 @@ class DataTables
 
     private function getSearchMethod($alias)
     {
-        $mustUseHaving = ['GROUP_CONCAT', 'COUNT', 'MIN', 'IFNULL'];
+        $aggregate = [
+            'AVG',
+            'BIT_AND',
+            'BIT_OR',
+            'BIT_XOR',
+            'COUNT',
+            'GROUP_CONCAT',
+            'JSON_ARRAYAGG',
+            'JSON_OBJECTAGG',
+            'MAX',
+            'MIN',
+            'STD',
+            'STDDEV',
+            'STDDEV_POP',
+            'STDDEV_SAMP',
+            'SUM',
+            'VAR_POP',
+            'VAR_SAMP',
+            'VARIANCE',
+        ];
 
-        foreach ($mustUseHaving as $m) {
+        foreach ($aggregate as $m) {
             if (strpos($alias, $m) !== false) {
                 return 'havingRaw';
             }
