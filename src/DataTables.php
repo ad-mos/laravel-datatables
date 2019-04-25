@@ -71,7 +71,7 @@ class DataTables
             $response = [];
 
             $this->prepareSelects();
-            $this->originalQuery = clone $query;
+            $this->originalQuery = clone $this->query;
 
             if (array_key_exists('columns', $reqData) && is_array($reqData['columns'])) {
                 $columns = $reqData['columns'];
