@@ -108,7 +108,7 @@ class DataTables
             )
         );
 
-        if ($tableAttr) {
+        if (!empty($tableAttr)) {
             foreach ($tableAttr as $attr) {
                 $selects[] = $this->DB->raw($this->table.'.'.$attr);
             }
@@ -227,14 +227,25 @@ class DataTables
     {
         $response['recordsTotal'] = $this->getCount($this->originalQuery);
 
-        if (!empty($this->query->getQuery()->wheres) &&
-            $this->originalQuery->getQuery()->wheres !== $this->query->getQuery()->wheres) {
+        if ($this->withWheres() || $this->withHavings()) {
             $response['recordsFiltered'] = $this->getCount($this->query);
         } else {
             $response['recordsFiltered'] = $response['recordsTotal'];
         }
 
         return $response;
+    }
+
+    private function withWheres()
+    {
+        return !empty($this->query->getQuery()->wheres) &&
+            $this->originalQuery->getQuery()->wheres !== $this->query->getQuery()->wheres;
+    }
+
+    private function withHavings()
+    {
+        return !empty($this->query->getQuery()->havings) &&
+            $this->originalQuery->getQuery()->havings !== $this->query->getQuery()->havings;
     }
 
     private function getCount(Builder $query) : int
@@ -247,7 +258,7 @@ class DataTables
                 ->first()
                 ->count;
         } else {
-            return $query->count();
+            return $query->getQuery()->count();
         }
     }
 
