@@ -66,6 +66,7 @@ class DataTables
                 ->connection($model->getConnectionName())
                 ->getDoctrineSchemaManager()
                 ->listTableColumns($this->table);
+            $this->tableColumns = $this->removeKeyQuotes($this->tableColumns);
 
             $reqData = $this->request->all();
             $response = [];
@@ -95,6 +96,20 @@ class DataTables
         }
 
         return new Response('', 400);
+    }
+
+    private function removeKeyQuotes($array)
+    {
+        foreach ($array as $key => $value) {
+            $newKey = str_replace('`', '', $key);
+
+            if ($key !== $newKey) {
+                $array[$newKey] = $value;
+                unset($array[$key]);
+            }
+        }
+
+        return $array;
     }
 
     private function prepareSelects()
