@@ -88,7 +88,7 @@ class DataTables
         return $this->provider(...func_get_args());
     }
 
-    private function provider(Model $model, Builder $query, array $aliases) : ?Builder
+    private function provider(Model $model, Builder $query = null, array $aliases = null) : ?Builder
     {
         if ($this->request->has(['draw', 'start', 'length'])) {
             $this->model = $model;
