@@ -12,7 +12,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Illuminate\Support\Arr;
 
 class DataTables
@@ -52,9 +51,44 @@ class DataTables
      * @param \Illuminate\Database\Eloquent\Builder $query
      * @param array                                 $aliases
      *
-     * @return \Illuminate\Http\Response|\Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function provide(Model $model, Builder $query = null, array $aliases = null)
+    public function provide(Model $model, Builder $query = null, array $aliases = null) : JsonResponse
+    {
+        $query = $this->provider(...func_get_args());
+
+        if ($query) {
+            $response = [];
+            $reqData = $this->request->all();
+
+            $response['draw'] = +$reqData['draw'];
+            $response = $this->setResultCounters($response);
+
+            $this->applyPagination($reqData);
+
+            $response['data'] = $this->query
+                ->get()
+                ->toArray();
+
+            return new JsonResponse($response);
+        }
+
+        return new JsonResponse('', 400);
+    }
+
+    /**
+     * @param \Illuminate\Database\Eloquent\Model   $model
+     * @param \Illuminate\Database\Eloquent\Builder $query
+     * @param array                                 $aliases
+     *
+     * @return \Illuminate\Database\Eloquent\Builder
+     */
+    public function provideQuery(Model $model, Builder $query = null, array $aliases = null) : ?Builder
+    {
+        return $this->provider(...func_get_args());
+    }
+
+    private function provider(Model $model, Builder $query, array $aliases) : ?Builder
     {
         if ($this->request->has(['draw', 'start', 'length'])) {
             $this->model = $model;
@@ -69,7 +103,6 @@ class DataTables
             $this->tableColumns = $this->removeKeyQuotes($this->tableColumns);
 
             $reqData = $this->request->all();
-            $response = [];
 
             $this->prepareSelects();
             $this->originalQuery = clone $this->query;
@@ -83,19 +116,10 @@ class DataTables
                 }
             }
 
-            $response['draw'] = +$reqData['draw'];
-            $response = $this->setResultCounters($response);
-
-            $this->applyPagination($reqData);
-
-            $response['data'] = $this->query
-                ->get()
-                ->toArray();
-
-            return new JsonResponse($response);
+            return $this->query;
         }
 
-        return new Response('', 400);
+        return null;
     }
 
     private function removeKeyQuotes($array)
