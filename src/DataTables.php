@@ -5,6 +5,7 @@ namespace AdMos\DataTables;
 use Carbon\Carbon;
 use Doctrine\DBAL\Schema\Column;
 use Doctrine\DBAL\Types\BigIntType;
+use Doctrine\DBAL\Types\BooleanType;
 use Doctrine\DBAL\Types\IntegerType;
 use Doctrine\DBAL\Types\SmallIntType;
 use Illuminate\Database\DatabaseManager;
@@ -358,6 +359,7 @@ class DataTables
 
         return !($tableColumns[$column]->getType() instanceof IntegerType ||
             $tableColumns[$column]->getType() instanceof SmallIntType ||
-            $tableColumns[$column]->getType() instanceof BigIntType);
+            $tableColumns[$column]->getType() instanceof BigIntType ||
+            $tableColumns[$column]->getType() instanceof BooleanType);
     }
 }
