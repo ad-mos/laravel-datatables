@@ -17,25 +17,25 @@ use Illuminate\Support\Arr;
 
 class DataTables
 {
-    /** @var Request $request */
+    /** @var Request */
     private $request;
 
-    /** @var string $table */
+    /** @var string */
     private $table;
 
-    /** @var array $tableColumns */
+    /** @var array */
     private $tableColumns;
 
-    /** @var Model $model */
+    /** @var Model */
     private $model;
 
-    /** @var Builder $query */
+    /** @var Builder */
     private $query;
 
-    /** @var Builder $query */
+    /** @var Builder */
     private $originalQuery;
 
-    /** @var array|null $aliases */
+    /** @var array|null */
     private $aliases;
 
     /** @var DatabaseManager */
@@ -54,7 +54,7 @@ class DataTables
      *
      * @return \Illuminate\Http\JsonResponse
      */
-    public function provide(Model $model, Builder $query = null, array $aliases = null) : JsonResponse
+    public function provide(Model $model, Builder $query = null, array $aliases = null): JsonResponse
     {
         $query = $this->provider(...func_get_args());
 
@@ -84,12 +84,12 @@ class DataTables
      *
      * @return \Illuminate\Database\Eloquent\Builder
      */
-    public function provideQuery(Model $model, Builder $query = null, array $aliases = null) : ?Builder
+    public function provideQuery(Model $model, Builder $query = null, array $aliases = null): ?Builder
     {
         return $this->provider(...func_get_args());
     }
 
-    private function provider(Model $model, Builder $query = null, array $aliases = null) : ?Builder
+    private function provider(Model $model, Builder $query = null, array $aliases = null): ?Builder
     {
         if ($this->request->has(['draw', 'start', 'length'])) {
             $this->model = $model;
@@ -212,7 +212,7 @@ class DataTables
         }
     }
 
-    private function isDateRange($value) : bool
+    private function isDateRange($value): bool
     {
         return (bool) (strlen($value) === 23) &&
             preg_match('^\\d{2}/\\d{2}/\\d{4} - \\d{2}/\\d{2}/\\d{4}^', $value);
@@ -263,7 +263,7 @@ class DataTables
         }
     }
 
-    private function setResultCounters(array $response) : array
+    private function setResultCounters(array $response): array
     {
         $response['recordsTotal'] = $this->getCount($this->originalQuery);
 
@@ -288,7 +288,7 @@ class DataTables
             $this->originalQuery->getQuery()->havings !== $this->query->getQuery()->havings;
     }
 
-    private function getCount(Builder $query) : int
+    private function getCount(Builder $query): int
     {
         if (!empty($query->getQuery()->groups) || !empty($query->getQuery()->havings)) {
             return $this->DB
