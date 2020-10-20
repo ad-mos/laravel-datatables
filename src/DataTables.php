@@ -121,7 +121,7 @@ class DataTables
 
                 if (is_array($this->reqData['columns'])) {
                     $this->applySearch($columns);
-                    $this->applyOrder($this->reqData, $columns);
+                    $this->applyOrder($columns);
                 }
             }
 
