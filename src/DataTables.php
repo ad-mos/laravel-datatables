@@ -17,8 +17,8 @@ use Illuminate\Support\Arr;
 
 class DataTables
 {
-    /** @var Request */
-    private $request;
+    /** @var array */
+    private $reqData;
 
     /** @var string */
     private $table;
@@ -43,8 +43,15 @@ class DataTables
 
     public function __construct(Request $request, DatabaseManager $DB)
     {
-        $this->request = $request;
+        $this->reqData = $request->all();
         $this->DB = $DB;
+    }
+
+    public function withInput(array $requestData)
+    {
+        $this->reqData = $requestData;
+
+        return $this;
     }
 
     /**
@@ -60,12 +67,11 @@ class DataTables
 
         if ($query) {
             $response = [];
-            $reqData = $this->request->all();
 
-            $response['draw'] = +$reqData['draw'];
+            $response['draw'] = +$this->reqData['draw'];
             $response = $this->setResultCounters($response);
 
-            $this->applyPagination($reqData);
+            $this->applyPagination();
 
             $response['data'] = $this->query
                 ->get()
@@ -91,7 +97,11 @@ class DataTables
 
     private function provider(Model $model, Builder $query = null, array $aliases = null): ?Builder
     {
-        if ($this->request->has(['draw', 'start', 'length'])) {
+        if (
+            array_key_exists('draw', $this->reqData) &&
+            array_key_exists('start', $this->reqData) &&
+            array_key_exists('length', $this->reqData)
+        ) {
             $this->model = $model;
             $this->query = $query ?? $this->model->newQuery();
             $this->aliases = $aliases;
@@ -103,17 +113,15 @@ class DataTables
                 ->listTableColumns($this->table);
             $this->tableColumns = $this->removeKeyQuotes($this->tableColumns);
 
-            $reqData = $this->request->all();
-
             $this->prepareSelects();
             $this->originalQuery = clone $this->query;
 
-            if (array_key_exists('columns', $reqData) && is_array($reqData['columns'])) {
-                $columns = $reqData['columns'];
+            if (array_key_exists('columns', $this->reqData) && is_array($this->reqData['columns'])) {
+                $columns = $this->reqData['columns'];
 
-                if (is_array($reqData['columns'])) {
+                if (is_array($this->reqData['columns'])) {
                     $this->applySearch($columns);
-                    $this->applyOrder($reqData, $columns);
+                    $this->applyOrder($this->reqData, $columns);
                 }
             }
 
@@ -225,12 +233,12 @@ class DataTables
             ->toDateString();
     }
 
-    private function applyOrder(array $reqData, array $columns)
+    private function applyOrder(array $columns)
     {
-        if (array_key_exists('order', $reqData)) {
-            $orderColumnId = Arr::get($reqData, 'order.0.column');
+        if (array_key_exists('order', $this->reqData)) {
+            $orderColumnId = Arr::get($this->reqData, 'order.0.column');
             $orderByColumn = Arr::get($columns, $orderColumnId.'.data');
-            $direction = Arr::get($reqData, 'order.0.dir');
+            $direction = Arr::get($this->reqData, 'order.0.dir');
 
             $this->applyQueryOrder($orderByColumn, $direction);
         }
@@ -302,14 +310,14 @@ class DataTables
         }
     }
 
-    private function applyPagination(array $reqData)
+    private function applyPagination()
     {
-        if (array_key_exists('start', $reqData)) {
-            $this->query->offset(+$reqData['start']);
+        if (array_key_exists('start', $this->reqData)) {
+            $this->query->offset(+$this->reqData['start']);
         }
 
-        if (array_key_exists('length', $reqData)) {
-            $this->query->limit(+$reqData['length']);
+        if (array_key_exists('length', $this->reqData)) {
+            $this->query->limit(+$this->reqData['length']);
         }
     }
 
