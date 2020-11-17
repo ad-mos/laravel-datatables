@@ -11,6 +11,7 @@ use Doctrine\DBAL\Types\SmallIntType;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Query\Expression;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -298,15 +299,18 @@ class DataTables
 
     private function getCount(Builder $query): int
     {
-        if (!empty($query->getQuery()->groups) || !empty($query->getQuery()->havings)) {
+        $countQuery = (clone $query)->getQuery();
+        $countQuery->columns = [new Expression('0')];
+
+        if (!empty($countQuery->groups) || !empty($countQuery->havings)) {
             return $this->DB
-                ->table($this->DB->raw('('.$query->toSql().') as s'))
-                ->setBindings($query->getQuery()->getBindings())
+                ->table($this->DB->raw('('.$countQuery->toSql().') as s'))
+                ->setBindings($countQuery->getBindings())
                 ->selectRaw('count(*) as count')
                 ->first()
                 ->count;
         } else {
-            return $query->getQuery()->count();
+            return $countQuery->count();
         }
     }
 
