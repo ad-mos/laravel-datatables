@@ -115,6 +115,8 @@ class DataTables
             $this->tableColumns = $this->removeKeyQuotes($this->tableColumns);
 
             $this->prepareSelects();
+            $this->wrapWheres();
+
             $this->originalQuery = clone $this->query;
 
             if (array_key_exists('columns', $this->reqData) && is_array($this->reqData['columns'])) {
@@ -130,6 +132,19 @@ class DataTables
         }
 
         return null;
+    }
+
+    private function wrapWheres()
+    {
+        $query = $this->query->getQuery();
+
+        $nq = $query->forNestedWhere();
+        $nq->mergeWheres($query->wheres, $query->bindings);
+
+        $query->wheres = [];
+        $query->bindings['where'] = [];
+
+        $query->addNestedWhereQuery($nq);
     }
 
     private function removeKeyQuotes($array)
