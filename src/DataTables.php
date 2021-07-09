@@ -42,6 +42,9 @@ class DataTables
     /** @var DatabaseManager */
     private $DB;
 
+    /** @var int */
+    private $totalRecordsCount = null;
+
     public function __construct(Request $request, DatabaseManager $DB)
     {
         $this->reqData = $request->all();
@@ -132,6 +135,13 @@ class DataTables
         }
 
         return null;
+    }
+
+    public function setTotalRecordsCount(int $count)
+    {
+        $this->totalRecordsCount = $count;
+
+        return $this;
     }
 
     private function wrapWheres()
@@ -289,7 +299,7 @@ class DataTables
 
     private function setResultCounters(array $response): array
     {
-        $response['recordsTotal'] = $this->getCount($this->originalQuery);
+        $response['recordsTotal'] = $this->totalRecordsCount ?? $this->getCount($this->originalQuery);
 
         if ($this->withWheres() || $this->withHavings()) {
             $response['recordsFiltered'] = $this->getCount($this->query);
