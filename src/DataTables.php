@@ -190,7 +190,7 @@ class DataTables
 
         if ($this->aliases) {
             foreach ($this->aliases as $alias => $value) {
-                $selects[] = $this->DB->raw($value.' AS '.$alias);
+                $selects[] = $this->DB->raw($value.' AS `'.$alias.'`');
             }
         }
 
