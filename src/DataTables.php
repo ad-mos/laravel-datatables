@@ -18,6 +18,8 @@ use Illuminate\Support\Arr;
 
 class DataTables
 {
+    const SIMPLE_PAGINATION_RECORDS = 100000;
+
     /** @var array */
     private $reqData;
 
@@ -45,6 +47,9 @@ class DataTables
     /** @var int */
     private $totalRecordsCount = null;
 
+    /** @var bool */
+    private $simplePagination = false;
+
     public function __construct(Request $request, DatabaseManager $DB)
     {
         $this->reqData = $request->all();
@@ -54,6 +59,13 @@ class DataTables
     public function withInput(array $requestData)
     {
         $this->reqData = $requestData;
+
+        return $this;
+    }
+
+    public function simplePagination()
+    {
+        $this->simplePagination = true;
 
         return $this;
     }
@@ -299,12 +311,17 @@ class DataTables
 
     private function setResultCounters(array $response): array
     {
-        $response['recordsTotal'] = $this->totalRecordsCount ?? $this->getCount($this->originalQuery);
-
-        if ($this->withWheres() || $this->withHavings()) {
-            $response['recordsFiltered'] = $this->getCount($this->query);
+        if ($this->simplePagination) {
+            $response['recordsTotal'] = self::SIMPLE_PAGINATION_RECORDS;
+            $response['recordsFiltered'] = self::SIMPLE_PAGINATION_RECORDS;
         } else {
-            $response['recordsFiltered'] = $response['recordsTotal'];
+            $response['recordsTotal'] = $this->totalRecordsCount ?? $this->getCount($this->originalQuery);
+
+            if ($this->withWheres() || $this->withHavings()) {
+                $response['recordsFiltered'] = $this->getCount($this->query);
+            } else {
+                $response['recordsFiltered'] = $response['recordsTotal'];
+            }
         }
 
         return $response;
@@ -346,8 +363,15 @@ class DataTables
         }
 
         if (array_key_exists('length', $this->reqData)) {
-            $this->query->limit(+$this->reqData['length']);
+            $this->query->limit($this->getRequestRecordsLimit());
         }
+    }
+
+    private function getRequestRecordsLimit(): int
+    {
+        $length = intval($this->reqData['length']);
+
+        return $this->simplePagination ? $length + 1 : $length;
     }
 
     private function getSearchMethod($alias)
