@@ -50,6 +50,9 @@ class DataTables
     /** @var bool */
     private $simplePagination = false;
 
+    /** @var array */
+    private $strictSearchColumns = [];
+
     public function __construct(Request $request, DatabaseManager $DB)
     {
         $this->reqData = $request->all();
@@ -152,6 +155,13 @@ class DataTables
     public function setTotalRecordsCount(int $count)
     {
         $this->totalRecordsCount = $count;
+
+        return $this;
+    }
+
+    public function setStrictSearchColumns(array $columns)
+    {
+        $this->strictSearchColumns = $columns;
 
         return $this;
     }
@@ -414,6 +424,10 @@ class DataTables
      */
     private function shouldUseLike($tableColumns, $column)
     {
+        if (in_array($column, $this->strictSearchColumns)) {
+            return false;
+        }
+
         if (!array_key_exists($column, $tableColumns)) {
             return true;
         }
