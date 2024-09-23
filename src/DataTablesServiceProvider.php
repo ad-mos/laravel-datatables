@@ -2,8 +2,10 @@
 
 namespace AdMos\DataTables;
 
+use AdMos\DataTables\Mixins\ScoutBuilder;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Support\ServiceProvider;
+use Laravel\Scout\Builder;
 
 class DataTablesServiceProvider extends ServiceProvider
 {
@@ -26,8 +28,11 @@ class DataTablesServiceProvider extends ServiceProvider
         });
     }
 
+    /**
+     * @throws \ReflectionException
+     */
     public function boot()
     {
-        //
+        Builder::mixin(new ScoutBuilder());
     }
 }

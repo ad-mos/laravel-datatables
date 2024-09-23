@@ -2,6 +2,7 @@
 
 namespace AdMos\DataTables;
 
+use AdMos\DataTables\Contracts\ScoutSearch;
 use Carbon\Carbon;
 use Doctrine\DBAL\Schema\Column;
 use Doctrine\DBAL\Types\BigIntType;
@@ -21,7 +22,7 @@ class DataTables
     const SIMPLE_PAGINATION_RECORDS = 100000;
 
     /** @var array */
-    private $reqData;
+    public $reqData;
 
     /** @var string */
     private $table;
@@ -30,7 +31,7 @@ class DataTables
     private $tableColumns;
 
     /** @var Model */
-    private $model;
+    public $model;
 
     /** @var Builder */
     private $query;
@@ -52,6 +53,9 @@ class DataTables
 
     /** @var array */
     private $strictSearchColumns = [];
+
+    /** @var ScoutSearch */
+    private ?ScoutSearch $scout = null;
 
     public function __construct(Request $request, DatabaseManager $DB)
     {
@@ -88,6 +92,13 @@ class DataTables
             $response = [];
 
             $response['draw'] = +$this->reqData['draw'];
+
+            if ($this->scout != null) {
+                if ($scoutResponse = $this->scoutProvide($query, $response)) {
+                    return new JsonResponse($scoutResponse);
+                }
+            }
+
             $response = $this->setResultCounters($response);
 
             $this->applyPagination();
@@ -100,6 +111,57 @@ class DataTables
         }
 
         return new JsonResponse('', 400);
+    }
+
+    public function scout(ScoutSearch $search): static
+    {
+        $this->scout = $search;
+
+        return $this;
+    }
+
+    private function scoutProvide($query, $response)
+    {
+        $engine = $this->model->searchableUsing();
+
+        if (!$search = $this->scout->search($this)) {
+            return null;
+        }
+
+        [$length, $offset] = $this->getLengthOffset();
+
+        $scout = $search->query(function (Builder $builder) use ($query) {
+            $builder->setQuery($query->getQuery());
+        });
+        $rawResults = $engine->paginate($scout, $length, 1, $offset);
+
+        if ($this->simplePagination) {
+            $response['recordsTotal'] = self::SIMPLE_PAGINATION_RECORDS;
+            $response['recordsFiltered'] = self::SIMPLE_PAGINATION_RECORDS;
+        } else {
+            $originalQuery = $this->originalQuery;
+            $tmpScout = $search->query(function (Builder $builder) use ($originalQuery) {
+                $builder->setQuery($originalQuery->getQuery());
+            });
+            $tmpResults = $engine->paginate($tmpScout, $length, 1, $offset);
+            $response['recordsTotal'] = $tmpScout->totalCount($tmpResults);
+
+            if ($this->withWheres() || $this->withHavings()) {
+                $response['recordsFiltered'] = $scout->totalCount($rawResults);
+            } else {
+                $response['recordsFiltered'] = $response['recordsTotal'];
+            }
+        }
+
+        $results = $this->model->newCollection($engine->map(
+            $scout,
+            $rawResults,
+            $this->model
+        )->all());
+
+        $response['data'] = $results->toArray();
+
+        return $response;
     }
 
     /**
@@ -141,8 +203,11 @@ class DataTables
                 $columns = $this->reqData['columns'];
 
                 if (is_array($this->reqData['columns'])) {
-                    $this->applySearch($columns);
-                    $this->applyOrder($columns);
+                    $this->applySearch();
+                    [$orderColumn, $orderDirection] = $this->getOrder();
+                    if ($orderColumn && $orderDirection) {
+                        $this->applyQueryOrder($orderColumn, $orderDirection);
+                    }
                 }
             }
 
@@ -206,13 +271,13 @@ class DataTables
 
         if (!empty($tableAttr)) {
             foreach ($tableAttr as $attr) {
-                $selects[] = $this->DB->raw($this->table.'.'.$attr);
+                $selects[] = $this->DB->raw($this->table . '.' . $attr);
             }
         }
 
         if ($this->aliases) {
             foreach ($this->aliases as $alias => $value) {
-                $selects[] = $this->DB->raw($value.' AS `'.$alias.'`');
+                $selects[] = $this->DB->raw($value . ' AS `' . $alias . '`');
             }
         }
 
@@ -221,9 +286,13 @@ class DataTables
         }
     }
 
-    private function applySearch(array $columns)
+    private function applySearch()
     {
-        foreach ($columns as $column) {
+        if (!is_array($this->reqData['columns'])) {
+            return;
+        }
+
+        foreach ($this->reqData['columns'] as $column) {
             $searchValue = Arr::get($column, 'search.value');
             $searchColumn = Arr::get($column, 'data');
 
@@ -250,18 +319,18 @@ class DataTables
             $to = $this->toMySQLDate($to, 1);
 
             return [
-                $searchField.' between ? and ?',
+                $searchField . ' between ? and ?',
                 [$from, $to],
             ];
         } else {
             if ($this->shouldUseLike($this->tableColumns, $column)) {
                 return [
-                    $searchField.' like ?',
-                    ['%'.$searchValue.'%'],
+                    $searchField . ' like ?',
+                    ['%' . $searchValue . '%'],
                 ];
             } else {
                 return [
-                    $searchField.' = ?',
+                    $searchField . ' = ?',
                     [$searchValue],
                 ];
             }
@@ -281,15 +350,24 @@ class DataTables
             ->toDateString();
     }
 
-    private function applyOrder(array $columns)
+    public function getOrder(): array
     {
-        if (array_key_exists('order', $this->reqData)) {
+        if (is_array($this->reqData['columns']) && array_key_exists('order', $this->reqData)) {
             $orderColumnId = Arr::get($this->reqData, 'order.0.column');
-            $orderByColumn = Arr::get($columns, $orderColumnId.'.data');
+            $orderByColumn = Arr::get($this->reqData['columns'], $orderColumnId . '.data');
             $direction = Arr::get($this->reqData, 'order.0.dir');
 
-            $this->applyQueryOrder($orderByColumn, $direction);
+            return [$orderByColumn, $direction];
         }
+        return [null, null];
+    }
+
+    public function getLengthOffset(): array
+    {
+        return [
+            array_key_exists('length', $this->reqData) ? (int) $this->getRequestRecordsLimit() : 10,
+            array_key_exists('start', $this->reqData) ? (int) $this->reqData['start'] : 0
+        ];
     }
 
     private function applyQueryOrder($orderByColumn, $direction)
@@ -303,14 +381,14 @@ class DataTables
             return;
         }
 
-        $this->query->orderByRaw($orderField.' '.$direction);
+        $this->query->orderByRaw($orderField . ' ' . $direction);
     }
 
     private function getField($column)
     {
         if (empty($this->aliases) || !array_key_exists($column, $this->aliases)) {
             if (array_key_exists($column, $this->tableColumns)) {
-                return $this->table.'.'.$column;
+                return $this->table . '.' . $column;
             } else {
                 return null;
             }
@@ -356,7 +434,7 @@ class DataTables
 
         if (!empty($countQuery->groups) || !empty($countQuery->havings)) {
             return $this->DB
-                ->table($this->DB->raw('('.$countQuery->toSql().') as s'))
+                ->table($this->DB->raw('(' . $countQuery->toSql() . ') as s'))
                 ->setBindings($countQuery->getBindings())
                 ->selectRaw('count(*) as count')
                 ->first()
