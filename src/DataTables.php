@@ -16,7 +16,6 @@ use Illuminate\Database\Query\Expression;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
-use Laravel\Scout\Builder as ScoutBuilder;
 
 class DataTables
 {
