@@ -3,7 +3,7 @@
 namespace AdMos\DataTables;
 
 use Carbon\Carbon;
-use Doctrine\DBAL\Schema\Column;
+use Doctrine\DBAL\Exception;
 use Doctrine\DBAL\Types\BigIntType;
 use Doctrine\DBAL\Types\BooleanType;
 use Doctrine\DBAL\Types\IntegerType;
@@ -18,7 +18,7 @@ use Illuminate\Support\Arr;
 
 class DataTables
 {
-    const SIMPLE_PAGINATION_RECORDS = 100000;
+    public const SIMPLE_PAGINATION_RECORDS = 100000;
 
     /** @var array */
     private $reqData;
@@ -59,14 +59,14 @@ class DataTables
         $this->DB = $DB;
     }
 
-    public function withInput(array $requestData)
+    public function withInput(array $requestData): DataTables
     {
         $this->reqData = $requestData;
 
         return $this;
     }
 
-    public function simplePagination()
+    public function simplePagination(): DataTables
     {
         $this->simplePagination = true;
 
@@ -74,11 +74,11 @@ class DataTables
     }
 
     /**
-     * @param \Illuminate\Database\Eloquent\Model   $model
-     * @param \Illuminate\Database\Eloquent\Builder $query
-     * @param array                                 $aliases
+     * @param Model $model
+     * @param Builder|null $query
+     * @param array|null $aliases
      *
-     * @return \Illuminate\Http\JsonResponse
+     * @return JsonResponse
      */
     public function provide(Model $model, Builder $query = null, array $aliases = null): JsonResponse
     {
@@ -103,17 +103,21 @@ class DataTables
     }
 
     /**
-     * @param \Illuminate\Database\Eloquent\Model   $model
-     * @param \Illuminate\Database\Eloquent\Builder $query
-     * @param array                                 $aliases
+     * @param Model $model
+     * @param Builder|null $query
+     * @param array|null $aliases
      *
-     * @return \Illuminate\Database\Eloquent\Builder
+     * @return Builder
+     * @throws Exception
      */
     public function provideQuery(Model $model, Builder $query = null, array $aliases = null): ?Builder
     {
         return $this->provider(...func_get_args());
     }
 
+    /**
+     * @throws Exception
+     */
     private function provider(Model $model, Builder $query = null, array $aliases = null): ?Builder
     {
         if (
@@ -152,21 +156,24 @@ class DataTables
         return null;
     }
 
-    public function setTotalRecordsCount(int $count)
+    public function setTotalRecordsCount(int $count): DataTables
     {
         $this->totalRecordsCount = $count;
 
         return $this;
     }
 
-    public function setStrictSearchColumns(array $columns)
+    public function setStrictSearchColumns(array $columns): DataTables
     {
         $this->strictSearchColumns = $columns;
 
         return $this;
     }
 
-    private function wrapWheres()
+    /**
+     * @return void
+     */
+    protected function wrapWheres(): void
     {
         $query = $this->query->getQuery();
 
@@ -179,7 +186,11 @@ class DataTables
         $query->addNestedWhereQuery($nq);
     }
 
-    private function removeKeyQuotes($array)
+    /**
+     * @param $array
+     * @return mixed
+     */
+    protected function removeKeyQuotes($array)
     {
         foreach ($array as $key => $value) {
             $newKey = str_replace('`', '', $key);
@@ -193,7 +204,10 @@ class DataTables
         return $array;
     }
 
-    private function prepareSelects()
+    /**
+     * @return void
+     */
+    protected function prepareSelects(): void
     {
         $tableAttr = array_keys(
             array_diff_key(
@@ -206,13 +220,13 @@ class DataTables
 
         if (!empty($tableAttr)) {
             foreach ($tableAttr as $attr) {
-                $selects[] = $this->DB->raw($this->table.'.'.$attr);
+                $selects[] = $this->DB->raw($this->table . '.' . $attr);
             }
         }
 
         if ($this->aliases) {
             foreach ($this->aliases as $alias => $value) {
-                $selects[] = $this->DB->raw($value.' AS `'.$alias.'`');
+                $selects[] = $this->DB->raw($value . ' AS `' . $alias . '`');
             }
         }
 
@@ -221,7 +235,11 @@ class DataTables
         }
     }
 
-    private function applySearch(array $columns)
+    /**
+     * @param array $columns
+     * @return void
+     */
+    protected function applySearch(array $columns): void
     {
         foreach ($columns as $column) {
             $searchValue = Arr::get($column, 'search.value');
@@ -241,7 +259,13 @@ class DataTables
         }
     }
 
-    private function getSearchQuery($searchField, $searchValue, $column)
+    /**
+     * @param $searchField
+     * @param $searchValue
+     * @param $column
+     * @return array
+     */
+    protected function getSearchQuery($searchField, $searchValue, $column): array
     {
         if ($this->isDateRange($searchValue)) {
             [$from, $to] = explode(' - ', $searchValue);
@@ -250,49 +274,67 @@ class DataTables
             $to = $this->toMySQLDate($to, 1);
 
             return [
-                $searchField.' between ? and ?',
+                $searchField . ' between ? and ?',
                 [$from, $to],
             ];
         } else {
             if ($this->shouldUseLike($this->tableColumns, $column)) {
                 return [
-                    $searchField.' like ?',
-                    ['%'.$searchValue.'%'],
+                    $searchField . ' like ?',
+                    ['%' . $searchValue . '%'],
                 ];
             } else {
                 return [
-                    $searchField.' = ?',
+                    $searchField . ' = ?',
                     [$searchValue],
                 ];
             }
         }
     }
 
-    private function isDateRange($value): bool
+    /**
+     * @param $value
+     * @return bool
+     */
+    protected function isDateRange($value): bool
     {
-        return (bool) (strlen($value) === 23) &&
+        return (bool)(strlen($value) === 23) &&
             preg_match('^\\d{2}/\\d{2}/\\d{4} - \\d{2}/\\d{2}/\\d{4}^', $value);
     }
 
-    private function toMySQLDate($value, $plusDay = 0)
+    /**
+     * @param $value
+     * @param int $plusDay
+     * @return string
+     */
+    protected function toMySQLDate($value, int $plusDay = 0): string
     {
         return Carbon::createFromFormat('d/m/Y', $value)
             ->addDays($plusDay)
             ->toDateString();
     }
 
-    private function applyOrder(array $columns)
+    /**
+     * @param array $columns
+     * @return void
+     */
+    protected function applyOrder(array $columns): void
     {
         if (array_key_exists('order', $this->reqData)) {
             $orderColumnId = Arr::get($this->reqData, 'order.0.column');
-            $orderByColumn = Arr::get($columns, $orderColumnId.'.data');
+            $orderByColumn = Arr::get($columns, $orderColumnId . '.data');
             $direction = Arr::get($this->reqData, 'order.0.dir');
 
             $this->applyQueryOrder($orderByColumn, $direction);
         }
     }
 
-    private function applyQueryOrder($orderByColumn, $direction)
+    /**
+     * @param $orderByColumn
+     * @param $direction
+     * @return void
+     */
+    protected function applyQueryOrder($orderByColumn, $direction): void
     {
         if ($direction !== 'asc' && $direction !== 'desc') {
             return;
@@ -303,14 +345,18 @@ class DataTables
             return;
         }
 
-        $this->query->orderByRaw($orderField.' '.$direction);
+        $this->query->orderByRaw($orderField . ' ' . $direction);
     }
 
-    private function getField($column)
+    /**
+     * @param $column
+     * @return mixed|string|null
+     */
+    protected function getField($column)
     {
         if (empty($this->aliases) || !array_key_exists($column, $this->aliases)) {
             if (array_key_exists($column, $this->tableColumns)) {
-                return $this->table.'.'.$column;
+                return $this->table . '.' . $column;
             } else {
                 return null;
             }
@@ -319,7 +365,11 @@ class DataTables
         }
     }
 
-    private function setResultCounters(array $response): array
+    /**
+     * @param array $response
+     * @return array
+     */
+    protected function setResultCounters(array $response): array
     {
         if ($this->simplePagination) {
             $response['recordsTotal'] = self::SIMPLE_PAGINATION_RECORDS;
@@ -337,26 +387,36 @@ class DataTables
         return $response;
     }
 
-    private function withWheres()
+    /**
+     * @return bool
+     */
+    protected function withWheres(): bool
     {
         return !empty($this->query->getQuery()->wheres) &&
             $this->originalQuery->getQuery()->wheres !== $this->query->getQuery()->wheres;
     }
 
-    private function withHavings()
+    /**
+     * @return bool
+     */
+    protected function withHavings(): bool
     {
         return !empty($this->query->getQuery()->havings) &&
             $this->originalQuery->getQuery()->havings !== $this->query->getQuery()->havings;
     }
 
-    private function getCount(Builder $query): int
+    /**
+     * @param Builder $query
+     * @return int
+     */
+    protected function getCount(Builder $query): int
     {
         $countQuery = (clone $query)->getQuery();
         $countQuery->columns = [new Expression('0')];
 
         if (!empty($countQuery->groups) || !empty($countQuery->havings)) {
             return $this->DB
-                ->table($this->DB->raw('('.$countQuery->toSql().') as s'))
+                ->table($this->DB->raw('(' . $countQuery->toSql() . ') as s'))
                 ->setBindings($countQuery->getBindings())
                 ->selectRaw('count(*) as count')
                 ->first()
@@ -366,7 +426,10 @@ class DataTables
         }
     }
 
-    private function applyPagination()
+    /**
+     * @return void
+     */
+    protected function applyPagination(): void
     {
         if (array_key_exists('start', $this->reqData)) {
             $this->query->offset(+$this->reqData['start']);
@@ -377,14 +440,21 @@ class DataTables
         }
     }
 
-    private function getRequestRecordsLimit(): int
+    /**
+     * @return int
+     */
+    protected function getRequestRecordsLimit(): int
     {
-        $length = intval($this->reqData['length']);
+        $length = (int)$this->reqData['length'];
 
         return $this->simplePagination ? $length + 1 : $length;
     }
 
-    private function getSearchMethod($alias)
+    /**
+     * @param $alias
+     * @return string
+     */
+    protected function getSearchMethod($alias): string
     {
         $aggregate = [
             'AVG',
@@ -417,14 +487,13 @@ class DataTables
     }
 
     /**
-     * @param Column[] $tableColumns
-     * @param string   $column
-     *
-     * @return mixed
+     * @param $tableColumns
+     * @param $column
+     * @return bool
      */
-    private function shouldUseLike($tableColumns, $column)
+    protected function shouldUseLike($tableColumns, $column): bool
     {
-        if (in_array($column, $this->strictSearchColumns)) {
+        if (in_array($column, $this->strictSearchColumns, true)) {
             return false;
         }
 

@@ -51,6 +51,42 @@ return datatables()->provide(...);
 return \DataTables::provide(...);
 ```
 
+## Configuration and Extending DataTables
+
+You can publish the package configuration file to your application to override the default settings or extend package functionality.
+```php
+php artisan vendor:publish --provider="AdMos\DataTables\DataTablesServiceProvider" --tag="admos-datatables-config"
+```
+This will create the file **config/ad-mos-datatables.php** in your application.
+
+### Overriding the DataTables Class
+If you want to extend or customize the default DataTables behavior, you can create your own class that extends the built-in **DataTables**, and specify it in the configuration:
+
+**Example:**
+
+```php
+// app/DataTables/MyCustomDataTables.php
+
+namespace App\DataTables;
+
+use AdMos\DataTables\DataTables as BaseDataTables;
+
+class MyCustomDataTables extends BaseDataTables
+{
+    // Your customizations here
+}
+```
+
+Then, in your config/ad-mos-datatables.php file, set:
+
+```php
+return [
+    'class' => \App\DataTables\MyCustomDataTables::class,
+];
+```
+
+Now, when you use the DataTables service or helper, your custom implementation will be used automatically.
+
 ## License
 
 The MIT License. More information [here](https://github.com/ad-mos/laravel-datatables/blob/master/LICENSE).
