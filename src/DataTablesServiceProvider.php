@@ -12,22 +12,39 @@ class DataTablesServiceProvider extends ServiceProvider
      *
      * @return void
      */
-    public function register()
+    public function register(): void
     {
         $app = $this->app;
 
-        $app->alias('datatables', DataTables::class);
+        $this->mergeConfigFrom(
+            __DIR__.'/../config/ad-mos-datatables.php', 'ad-mos-datatables'
+        );
 
-        $app->singleton('datatables', function () use ($app) {
-            return new DataTables(
+        $class = config('ad-mos-datatables.class', DataTables::class);
+
+        $app->alias('datatables', $class);
+
+        $app->singleton('datatables', function () use ($app, $class) {
+            return new $class(
                 $app->make('request'),
                 $app->make(DatabaseManager::class)
             );
         });
     }
 
-    public function boot()
+
+
+    public function boot(): void
     {
-        //
+        $this->offerPublishing();
+    }
+
+    protected function offerPublishing(): void
+    {
+        if ($this->app->runningInConsole()) {
+            $this->publishes([
+                __DIR__.'/../config/ad-mos-datatables.php' => config_path('ad-mos-datatables.php'),
+            ], 'admos-datatables-config');
+        }
     }
 }
