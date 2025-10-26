@@ -8,10 +8,12 @@ use Doctrine\DBAL\Types\BigIntType;
 use Doctrine\DBAL\Types\BooleanType;
 use Doctrine\DBAL\Types\IntegerType;
 use Doctrine\DBAL\Types\SmallIntType;
+use Exception;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Query\Expression;
+use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -53,6 +55,10 @@ class DataTables
     /** @var array */
     private $strictSearchColumns = [];
 
+    private ?int $timeout = null;
+    private int $defaultTimeout = 45000;
+    private string $timeoutErrorText = 'Час очікування запиту вийшов, змініть критерії пошуку, або спробуйте пізніше.';
+
     public function __construct(Request $request, DatabaseManager $DB)
     {
         $this->reqData = $request->all();
@@ -82,24 +88,62 @@ class DataTables
      */
     public function provide(Model $model, Builder $query = null, array $aliases = null): JsonResponse
     {
-        $query = $this->provider(...func_get_args());
+        $this->provider(...func_get_args());
 
-        if ($query) {
-            $response = [];
+        if ($this->query) {
+            try {
+                $response = [];
 
-            $response['draw'] = +$this->reqData['draw'];
-            $response = $this->setResultCounters($response);
+                $response['draw'] = +$this->reqData['draw'];
+                $response = $this->affectTimeout(fn() => $this->setResultCounters($response));
 
-            $this->applyPagination();
+                $this->applyPagination();
 
-            $response['data'] = $this->query
-                ->get()
-                ->toArray();
+                $response['data'] = $this->query
+                    ->get()
+                    ->toArray();
 
-            return new JsonResponse($response);
+                return new JsonResponse($response);
+            } catch (QueryException $e) {
+                if (str_contains($e->getMessage(), 'execution time exceeded')) {
+                    return $this->provideTimeoutError();
+                }
+
+                throw $e;
+            }
         }
 
         return new JsonResponse('', 400);
+    }
+
+    private function affectTimeout(callable $action)
+    {
+        $time = microtime(true);
+        $result = $action();
+        $time = (int) ((microtime(true) - $time) * 1000);
+
+        $timeout = $this->getTimeout();
+        if ($timeout > 0) {
+            $timeout -= $time;
+            if ($timeout <= 0) {
+                throw new QueryException('Query execution time exceeded', [], new Exception());
+            }
+        }
+
+        return $result;
+    }
+
+    private function provideTimeoutError(): JsonResponse
+    {
+        $this->defaultTimeout = 0;
+
+        return new JsonResponse([
+            'draw' => +$this->reqData['draw'],
+            'recordsTotal' => 0,
+            'recordsFiltered' => 0,
+            'data' => [],
+            'error' => $this->timeoutErrorText,
+        ]);
     }
 
     /**
@@ -111,6 +155,8 @@ class DataTables
      */
     public function provideQuery(Model $model, Builder $query = null, array $aliases = null): ?Builder
     {
+        $this->defaultTimeout = 0;
+
         return $this->provider(...func_get_args());
     }
 
@@ -166,6 +212,30 @@ class DataTables
         return $this;
     }
 
+    public function setTimeout(int $milliseconds, ?string $errorText = null)
+    {
+        $this->timeout = $milliseconds;
+        $this->timeoutErrorText = $errorText ?? $this->timeoutErrorText;
+
+        return $this;
+    }
+
+    private function getTimeout(): int
+    {
+        return $this->timeout ?? $this->defaultTimeout;
+    }
+
+    private function getTimeoutHint(): string
+    {
+        $timeout = $this->getTimeout();
+
+        if ($timeout === 0) {
+            return '';
+        }
+
+        return " /*+ MAX_EXECUTION_TIME({$timeout}) */ ";
+    }
+
     private function wrapWheres()
     {
         $query = $this->query->getQuery();
@@ -195,6 +265,10 @@ class DataTables
 
     private function prepareSelects()
     {
+        if (!empty($timeoutHint = $this->getTimeoutHint())) {
+            $selects = [$this->DB->raw($timeoutHint . '0')];
+        }
+
         $tableAttr = array_keys(
             array_diff_key(
                 array_flip(
@@ -354,16 +428,13 @@ class DataTables
         $countQuery = (clone $query)->getQuery();
         $countQuery->columns = [new Expression('0')];
 
-        if (!empty($countQuery->groups) || !empty($countQuery->havings)) {
-            return $this->DB
-                ->table($this->DB->raw('('.$countQuery->toSql().') as s'))
-                ->setBindings($countQuery->getBindings())
-                ->selectRaw('count(*) as count')
-                ->first()
-                ->count;
-        } else {
-            return $countQuery->count();
-        }
+        return $this->DB
+            ->table($this->DB->raw('(' . $countQuery->toSql() . ') as s'))
+            ->setBindings($countQuery->getBindings())
+            ->selectRaw($this->getTimeoutHint() . 'count(*) as count')
+            ->get()
+            ->first()
+            ->count;
     }
 
     private function applyPagination()
