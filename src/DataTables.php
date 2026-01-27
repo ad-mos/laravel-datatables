@@ -3,11 +3,6 @@
 namespace AdMos\DataTables;
 
 use Carbon\Carbon;
-use Doctrine\DBAL\Schema\Column;
-use Doctrine\DBAL\Types\BigIntType;
-use Doctrine\DBAL\Types\BooleanType;
-use Doctrine\DBAL\Types\IntegerType;
-use Doctrine\DBAL\Types\SmallIntType;
 use Exception;
 use Illuminate\Database\DatabaseManager;
 use Illuminate\Database\Eloquent\Builder;
@@ -17,6 +12,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\Schema;
 
 class DataTables
 {
@@ -172,10 +168,7 @@ class DataTables
             $this->aliases = $aliases;
 
             $this->table = $model->getTable();
-            $this->tableColumns = $this->DB
-                ->connection($model->getConnectionName())
-                ->getDoctrineSchemaManager()
-                ->listTableColumns($this->table);
+            $this->tableColumns = $this->getTableColumns($model);
             $this->tableColumns = $this->removeKeyQuotes($this->tableColumns);
 
             $this->prepareSelects();
@@ -261,6 +254,62 @@ class DataTables
         }
 
         return $array;
+    }
+
+    /**
+     * Get table columns with backwards compatibility for Laravel 10 and 11+.
+     */
+    private function getTableColumns(Model $model): array
+    {
+        $connection = $this->DB->connection($model->getConnectionName());
+
+        // Laravel 11+ removed getDoctrineSchemaManager, use Schema::getColumns instead
+        if (!method_exists($connection, 'getDoctrineSchemaManager')) {
+            $columns = Schema::connection($model->getConnectionName())->getColumns($this->table);
+
+            // Convert to associative array keyed by column name with type info
+            $result = [];
+            foreach ($columns as $column) {
+                $result[$column['name']] = [
+                    'name' => $column['name'],
+                    'type' => $column['type_name'],
+                ];
+            }
+
+            return $result;
+        }
+
+        // Laravel 10 and below - use Doctrine DBAL
+        return $connection->getDoctrineSchemaManager()->listTableColumns($this->table);
+    }
+
+    /**
+     * Check if a column is an integer type (works with both Doctrine Column and Laravel 11 array).
+     */
+    private function isIntegerType($column): bool
+    {
+        // Laravel 11+ format (array with 'type' key)
+        if (is_array($column) && isset($column['type'])) {
+            $type = strtolower($column['type']);
+
+            return in_array($type, ['int', 'integer', 'bigint', 'smallint', 'tinyint', 'mediumint', 'bool', 'boolean']);
+        }
+
+        // Laravel 10 and below - Doctrine Column object
+        if (is_object($column) && method_exists($column, 'getType')) {
+            $typeName = get_class($column->getType());
+
+            // Check for Doctrine type classes using string comparison
+            // to avoid class loading issues when Doctrine DBAL is not installed
+            return in_array($typeName, [
+                'Doctrine\DBAL\Types\IntegerType',
+                'Doctrine\DBAL\Types\SmallIntType',
+                'Doctrine\DBAL\Types\BigIntType',
+                'Doctrine\DBAL\Types\BooleanType',
+            ]);
+        }
+
+        return false;
     }
 
     private function prepareSelects()
@@ -488,10 +537,10 @@ class DataTables
     }
 
     /**
-     * @param Column[] $tableColumns
-     * @param string   $column
+     * @param array  $tableColumns
+     * @param string $column
      *
-     * @return mixed
+     * @return bool
      */
     private function shouldUseLike($tableColumns, $column)
     {
@@ -503,9 +552,6 @@ class DataTables
             return true;
         }
 
-        return !($tableColumns[$column]->getType() instanceof IntegerType ||
-            $tableColumns[$column]->getType() instanceof SmallIntType ||
-            $tableColumns[$column]->getType() instanceof BigIntType ||
-            $tableColumns[$column]->getType() instanceof BooleanType);
+        return !$this->isIntegerType($tableColumns[$column]);
     }
 }
